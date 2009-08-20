@@ -1,0 +1,52 @@
+The *crown* program gathers gem lib and bin files under one directory for fast loading and predictable behavior. For example:
+
+  [~/tmp] crown -v mygems json nokogiri sinatra
+  sinatra-0.9.4
+  nokogiri-1.3.3
+  json-1.1.7
+  rack-1.0.0
+  PATH=/home/vjoel/tmp/mygems/bin
+  RUBYLIB=/home/vjoel/tmp/mygems/ext:/home/vjoel/tmp/mygems/ext/json/ext:
+  /home/vjoel/tmp/mygems/lib
+
+The gems are copied under mygems:
+
+  [~/tmp] ls mygems
+  bin  ext  lib
+  [~/tmp] ls mygems/lib
+  action-nokogiri.rb  json.rb   nokogiri.rb  rack.rb  sinatra.rb
+  json                nokogiri  rack         sinatra  xsd
+
+The output of 'crown -v' shows you which gems (and versions) it is gathering, including all dependencies, and it shows you the PATH and RUBYLIB you need to use those files.
+
+Why?
+
+* You can stop requiring 'rubygems' and you don't need RUBYOPT='rubygems'. There are no runtime dependencies on rubygems.
+
+* Lookups for required files should be faster.
+
+* No chance that "gem update" or "gem cleanup" might break your program.
+
+* You can distribute the "crown of gems" with your program.
+
+Features:
+
+* Either symlink files (-s switch) or copy files (the default).
+
+* Include other non-gem files using dest:file syntax.
+
+* Existing files in the target dir are not touched if they are not in the way.
+
+* Works correctly even with gems that have strange require_path lists, like json.
+
+* No dirs are ever deleted or replaced.
+
+* A file is written only if either it doesn't already exist in the target dir or you specify the force (-f) switch.
+
+* The verify (-V) mode checks whether the target dir looks like it has had the crown command run on it with the given arguments.
+
+* Dry-run (-n) and verbose (-v, -vv) options, as in FileUtils
+
+See the help (-h) for details, license, version, and contact information.
+
+This software is not fully tested on all gems; please test carefully before using in production environments.

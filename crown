@@ -63,7 +63,7 @@ USAGE = <<END
   Options may appear anywhere on the command line and may be
   combined, as in: -sfvv.
 
-  Version #{VER}
+  Version #{VER}     Use under the terms of the Ruby license.
   Copyright (c) 2009, Joel VanderWerf, vjoel@users.sourceforge.net
 
 END
@@ -115,7 +115,7 @@ def parse_opts argv
     "f"     => true,
     "n"     => true,
     "V"     => true,
-    "v"     => proc {v+=1} # no argument, but call the proc to get the value
+    "v"     => proc {v+=1}
   }
 
   opts = defaults.merge(Argos.parse_options(argv, optdef))
@@ -185,23 +185,7 @@ def replicate_dir(dir, target_dir, opts)
   end
 end
 
-#def dereference_symlink(file, seen={})
-#  if File.symlink?(file)
-#    if seen[file]
-#      abort "File #{file} seems to be a loop of symlinks."
-#    end
-#    dereference_symlink(File.readlink(file), seen.merge(file => true))
-#  else
-#    file
-#  end
-#end
-
 def verify_one(file, target, opts)
-#  file = dereference_symlink(file)
-#  target = dereference_symlink(target)
-#  unless filetype(file) == filetype(target)
-#    abort "Files #{file} and #{target} are not the same file type."
-#  end
   unless File.directory?(file) == File.directory?(target)
     abort "Only one of #{file} and #{target} is a directory."
   end
