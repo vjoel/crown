@@ -1,0 +1,408 @@
+#!/usr/bin/env ruby
+
+require 'fileutils'
+require 'rubygems'
+require 'set'
+
+END{run}
+
+VER = "1.0.0"
+
+USAGE = <<END
+
+  Usage: #{$0} [opts] target_dir gem[=ver] ...
+  
+  Create dirs such as bin/ and lib/ in target_dir and populate
+  them with executable and library files from the gems of the
+  indicated versions (or the most current ones), plus the gems
+  that are required runtime dependencies of those gems.
+
+  Additional files and dirs, not necessarily from gems, may be
+  included in target_dir by listing them on the command line as:
+
+    lib:path/to/libdir
+    lib:path/to/lib.rb
+    bin:path/to/binfile
+
+  The prefix before the colon indicates the subdir of target_dir
+  into which the file or dir will be replicated. The prefix may
+  be empty or a complex path. The path after the colon may use
+  the glob chars: ? * ** { } [ ] plus \\ escaping. When running in
+  a shell, use quotes to prevent shell globbing. More examples:
+  
+    doc:path/to/file.doc
+    :README
+    "misc/script:path/to/*.sh"
+  
+  Any other files and dirs in the target_dir are ignored.
+  Successive runs will add to the existing target_dir.
+  (However, the env vars printed with -v only reflect the
+  current arguments.)
+  
+  Options are:
+
+    -h    Show this help and quit.
+
+    -s    Create symlinks rather than copies. A relative path
+          given on the command line will be made absolute.
+
+    -f    Force: replace existing target files. Otherwise,
+          abort if a conflict is detected. Never delete dirs.
+    
+    -V    Verify the replication: check that the dir structure
+          and file contents specified on the command line is
+          replicated in the target_dir (following symlinks).
+          Do  not touch any files.
+
+    -n    Dry run: do not touch any files. Implies -v.
+
+    -v    Verbose: output PATH and RUBYLIB strings, as well
+          as list of the gems/versions and other files included.
+          Use -v twice for full log of file operations.
+
+  Options may appear anywhere on the command line and may be
+  combined, as in: -sfvv.
+
+  Version #{VER}
+  Copyright (c) 2009, Joel VanderWerf, vjoel@users.sourceforge.net
+
+END
+
+def run argv=ARGV
+  opts = parse_opts(argv)
+  target_dir, gem_args, misc_args = parse_args(argv)
+
+  specs = GemUtils.collect_specs(gem_args)
+  
+  if opts[:verbosity] > 0
+    puts specs.map{|s| [s.name, s.version].join("-")} + misc_args
+  end
+  
+  specs.each do |spec|
+    replicate_gem(spec, target_dir, opts)
+  end
+  
+  misc_args.each do |arg|
+    replicate_glob(arg, target_dir, opts)
+  end
+  
+  if opts[:verbosity] > 0
+    bins = []; libs = []
+    @dirs.each do |(t,d),dir|
+      case d.split("/").last
+      when "bin", "script"; bins << File.expand_path(dir)
+      when "lib", "ext"; libs << File.expand_path(dir)
+      end
+    end
+    bins = bins.uniq
+    libs += @require_paths if @require_paths
+    libs = libs.uniq
+    puts "PATH=#{bins.join(":")}"
+    puts "RUBYLIB=#{libs.join(":")}"
+    
+    puts "Verification succeeded." if opts[:verify]
+  end
+end
+
+def parse_opts argv
+  v = 0
+  defaults = {
+    "v"     => v
+  }
+  optdef = {
+    "h"     => true,
+    "s"     => true,
+    "f"     => true,
+    "n"     => true,
+    "V"     => true,
+    "v"     => proc {v+=1} # no argument, but call the proc to get the value
+  }
+
+  opts = defaults.merge(Argos.parse_options(argv, optdef))
+  abort(USAGE) if opts["h"]
+
+  options = {
+    :symlink    => opts["s"],
+    :force      => opts["f"],
+    :noop       => opts["n"],
+    :verify     => opts["V"],
+    :verbosity  => opts["v"]
+  }
+  
+  if options[:noop]
+    options[:verbosity] = [options[:verbosity], 1].max
+    @FU = FileUtils::DryRun
+  elsif options[:verbosity] > 1
+    @FU = FileUtils::Verbose
+  else
+    @FU = FileUtils
+  end
+  
+  options
+end
+
+def parse_args argv
+  target_dir = argv.shift || abort(USAGE)
+  misc_args = argv.grep(/:/).uniq
+  gem_args = (argv - misc_args).uniq
+  
+  return target_dir, gem_args, misc_args
+end
+
+def replicate_gem spec, target_dir, opts
+  base = spec.full_gem_path
+
+  spec.add_bindir(spec.executables).each do |exe|
+    bin_dir = make_target_subdir(target_dir, "bin", opts)
+    full_exe = File.join(base, exe)
+    replicate_one(full_exe, bin_dir, opts)
+  end
+
+  @require_paths ||= []
+  spec.require_paths.each do |path|
+    @require_paths << File.expand_path(File.join(target_dir, path))
+    lib_dir = make_target_subdir(target_dir, path, opts)
+    full_glob = File.join(base, path, "*")
+    Dir[full_glob].each do |full_lib|
+      replicate_one(full_lib, lib_dir, opts)
+    end
+  end
+end
+
+def replicate_glob arg, target_dir, opts
+  dst, src_pat = arg.match(/(.*?):(.*)/).captures
+  dst_dir = make_target_subdir(target_dir, dst, opts)
+  Dir.glob(src_pat).each do |src|
+    replicate_one(src, dst_dir, opts)
+  end
+end
+
+def replicate_dir(dir, target_dir, opts)
+  raise unless File.directory?(dir) and File.directory?(target_dir)
+  Dir.new(dir).each do |file|
+    next if file == "." or file == ".."
+    replicate_one(File.join(dir, file), target_dir, opts)
+  end
+end
+
+#def dereference_symlink(file, seen={})
+#  if File.symlink?(file)
+#    if seen[file]
+#      abort "File #{file} seems to be a loop of symlinks."
+#    end
+#    dereference_symlink(File.readlink(file), seen.merge(file => true))
+#  else
+#    file
+#  end
+#end
+
+def verify_one(file, target, opts)
+#  file = dereference_symlink(file)
+#  target = dereference_symlink(target)
+#  unless filetype(file) == filetype(target)
+#    abort "Files #{file} and #{target} are not the same file type."
+#  end
+  unless File.directory?(file) == File.directory?(target)
+    abort "Only one of #{file} and #{target} is a directory."
+  end
+  if File.directory?(file)
+    replicate_dir(file, target, opts)
+  else
+    begin
+      @FU.identical?(file, target) or
+        abort "Contents of #{file} and #{target} differ."
+    rescue Errno::ENOENT
+      abort "File is missing: #{target}" if not File.exist?(target)
+      raise "Internal error: oops, #{file} is missing."
+    end
+  end
+end
+
+def replicate_one file, tgt_dir, opts
+  tgt = File.join(tgt_dir, File.basename(file))
+  
+  if opts[:verify]
+    verify_one(file, tgt, opts)
+    return
+  end
+
+  if File.directory?(tgt)
+    # because ln and cp would put stuff _inside_ tgt in this case
+    if File.symlink?(tgt)
+      replicate_one(file, tgt, opts.merge(:verify => true))
+    else
+      if File.directory?(file)
+        replicate_dir(file, tgt, opts)
+      else
+        abort "Replication target for #{file} exists and is a dir: " +
+          "#{tgt}\nAborting."
+      end
+    end
+
+  elsif opts[:symlink]
+    begin
+      if opts[:force]
+        @FU.rm_f(tgt)
+      end
+      @FU.ln_s(File.expand_path(file), tgt)
+    
+    rescue Errno::EEXIST
+      raise "force link failed to replace #{tgt}!" if opts[:force]
+      
+      if not File.symlink?(tgt)
+        abort "Replication target for #{file} exists but is not a symlink:" +
+          " #{tgt}\nAborting."
+      end
+      
+      if File.expand_path(File.readlink(tgt)) != File.expand_path(file)
+        abort "Replication target for #{file} exists but points to different"
+          "file: #{tgt} -> #{File.readlink(tgt)}\nAborting."
+      end
+      
+      # no write needed
+    end
+
+  else
+    if opts[:force] or # because cp_r always uses force
+       not File.exists?(tgt) ## minor race cond here and elsewhere
+      @FU.cp_r(file, tgt, :preserve => true)
+    
+    elsif filetype(tgt) != filetype(file) or !@FU.identical?(tgt, file)
+      abort "Replication target for #{file} exists and is different: #{tgt}"
+    end
+      
+    # no write needed
+  end
+end
+
+# A quick hack to compare filetypes.
+def filetype(path)
+  [File.file?(path), File.directory?(path), File.symlink?(path)]
+end
+
+def make_target_subdir(target_dir, name, opts)
+  @dirs ||= {}
+  @dirs[[target_dir, name]] ||= begin
+    dir = File.join(target_dir, name)
+    @FU.mkdir_p dir unless opts[:verify]
+    dir
+  end
+end
+
+module GemUtils
+  module_function
+  
+  def collect_specs gem_args
+    specs = Set[]
+    gem_args.each do |gem_arg|
+      name, req = parse_gem_arg(gem_arg)
+      spec = find_best_spec(name, req) or
+        abort "No such gem: #{name}, #{req.inspect}"
+      find_deps(spec, specs)
+      specs << spec
+    end
+    specs
+  end
+
+  def parse_gem_arg gem_arg
+    case gem_arg
+    when /^([^=]+)=([^=]+)$/
+      name = $1
+      version = $2
+      req = Gem::Requirement.create("= #{version}")
+    else
+      name = gem_arg
+      version = nil
+      req = Gem::Requirement.default
+    end
+    [name, req]
+  end
+
+  def find_all_specs gem_name, req
+    Gem.source_index.find_name(gem_name, req)
+  end
+
+  def find_best_spec gem_name, req
+    find_all_specs(gem_name, req).last
+  end
+
+  def find_deps spec, set = Set.new
+    deps = spec.dependencies.flatten.uniq
+    deps.each do |dep|
+      next if dep.type == :development
+      dep_spec = find_best_spec(dep.name, dep.version_requirements)
+      if dep_spec
+        set << dep_spec
+        find_deps(dep_spec, set)
+      else
+        warn "no spec for #{dep.inspect}"
+      end
+    end
+    set
+  end
+end
+
+# From http://redshift.sourceforge.net/argos.rb.
+module Argos
+  module_function
+
+  class OptionError < ArgumentError; end
+  
+  def argument_missing opt
+    raise OptionError, "#{opt}: no argument provided."
+  end
+  
+  def handle opt, handler, *args # :nodoc
+    args.empty? ?  handler[] : handler[args[0]]
+  rescue => ex
+    raise OptionError, "#{opt}: #{ex}"
+  end
+
+  def parse_options argv, optdef
+    orig = argv.dup; argv.clear
+    opts = {}
+
+    loop do
+      case (argstr=orig.shift)
+      when nil, "--"
+        argv.concat orig
+        break
+
+      when /^(--)([^=]+)=(.*)/, /^(-)([^-])(.+)/
+        short = ($1 == "-"); opt = $2; arg = $3
+        unless optdef.key?(opt)
+          argv << argstr
+          next
+        end
+        handler = optdef[opt]
+        arity = (handler.arity rescue nil)
+        opts[opt] =
+          case arity
+          when nil;   orig.unshift("-#{arg}") if short; handler
+          when 0,-1;  orig.unshift("-#{arg}") if short; handle(opt, handler)
+          else        handle(opt, handler, arg)
+          end
+
+      when /^--(.+)/, /^-(.)$/
+        opt = $1
+        unless optdef.key?(opt)
+          argv << argstr
+          next
+        end
+        handler = optdef[opt]
+        arity = (handler.arity rescue nil)
+        opts[opt] =
+          case arity
+          when nil;   handler
+          when 0,-1;  handle(opt, handler)
+          else        handle(opt, handler, orig.shift || argument_missing(opt))
+          end
+
+      else
+        argv << argstr
+      end
+    end
+
+    opts
+  end
+end
