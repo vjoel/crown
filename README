@@ -17,7 +17,12 @@ The gems are copied under mygems:
   action-nokogiri.rb  json.rb   nokogiri.rb  rack.rb  sinatra.rb
   json                nokogiri  rack         sinatra  xsd
 
-The output of 'crown -v' shows you which gems (and versions) it is gathering, including all dependencies, and it shows you the PATH and RUBYLIB you need to use those files.
+The output of 'crown -v' shows you which gems (and versions) it is gathering, including all dependencies, and it shows you the PATH and RUBYLIB you need to use those files:
+
+  [~/tmp] export RUBYOPT=''
+  [~/tmp] export RUBYLIB=/home/vjoel/tmp/mygems/ext:/home/vjoel/tmp/mygems/ext/json/ext:/home/vjoel/tmp/mygems/lib
+  [~/tmp] ruby -r json -e 'p JSON'
+  JSON
 
 Why?
 
