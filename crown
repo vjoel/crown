@@ -209,6 +209,8 @@ def replicate_one file, tgt_dir, opts
     verify_one(file, tgt, opts)
     return
   end
+  
+  @source ||= {}
 
   if File.directory?(tgt)
     # because ln and cp would put stuff _inside_ tgt in this case
@@ -228,7 +230,9 @@ def replicate_one file, tgt_dir, opts
       if opts[:force]
         @FU.rm_f(tgt)
       end
-      @FU.ln_s(File.expand_path(file), tgt)
+      file_full = File.expand_path(file)
+      @FU.ln_s(file_full, tgt)
+      @source[tgt] = file_full
     
     rescue Errno::EEXIST
       raise "force link failed to replace #{tgt}!" if opts[:force]
@@ -250,9 +254,15 @@ def replicate_one file, tgt_dir, opts
     if opts[:force] or # because cp_r always uses force
        not File.exists?(tgt) ## minor race cond here and elsewhere
       @FU.cp_r(file, tgt, :preserve => true)
+      @source[tgt] = File.expand_path(file)
     
     elsif filetype(tgt) != filetype(file) or !@FU.identical?(tgt, file)
-      abort "Replication target for #{file} exists and is different: #{tgt}"
+      t = tgt
+      until s = @source[t] or t == File.dirname(t)
+        t = File.dirname(t)
+      end
+      abort "Replication target for\n #{file}\nexists and is different:" +
+            "\n #{tgt}\n" + (s ? "copied from #{s}" : "")
     end
       
     # no write needed
