@@ -50,9 +50,9 @@ USAGE = <<END
           abort if a conflict is detected. Never delete dirs.
     
     -V    Verify the replication: check that the dir structure
-          and file contents specified on the command line is
+          and file contents specified on the command line are
           replicated in the target_dir (following symlinks).
-          Do  not touch any files.
+          Do not touch any files.
 
     -n    Dry run: do not touch any files. Implies -v.
 
@@ -64,7 +64,9 @@ USAGE = <<END
   combined, as in: -sfvv.
 
   Version #{VER}     Use under the terms of the Ruby license.
-  Copyright (c) 2009, Joel VanderWerf, vjoel@users.sourceforge.net
+  Copyright (c) 2009-2010, Joel VanderWerf
+  vjoel@users.sourceforge.net
+  http://github.com/vjoel/crown
 
 END
 
