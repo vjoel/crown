@@ -64,7 +64,7 @@ USAGE = <<END
   combined, as in: -sfvv.
 
   Version #{VER}     Use under the terms of the Ruby license.
-  Copyright (c) 2009-2010, Joel VanderWerf
+  Copyright (c) 2009-2014, Joel VanderWerf
   vjoel@users.sourceforge.net
   http://github.com/vjoel/crown
 
