@@ -1,30 +1,34 @@
+Crown
+=====
+
 The *crown* program gathers gem lib and bin files under one directory for fast loading and predictable behavior. For example:
 
-  [~/tmp] crown -v mygems json nokogiri sinatra
-  sinatra-0.9.4
-  nokogiri-1.3.3
-  json-1.1.7
-  rack-1.0.0
-  PATH=/home/vjoel/tmp/mygems/bin
-  RUBYLIB=/home/vjoel/tmp/mygems/ext:/home/vjoel/tmp/mygems/ext/json/ext:
-  /home/vjoel/tmp/mygems/lib
+    [~/tmp] crown -v mygems json nokogiri sinatra
+    sinatra-0.9.4
+    nokogiri-1.3.3
+    json-1.1.7
+    rack-1.0.0
+    PATH=/home/vjoel/tmp/mygems/bin
+    RUBYLIB=/home/vjoel/tmp/mygems/ext:/home/vjoel/tmp/mygems/ext/json/ext:
+    /home/vjoel/tmp/mygems/lib
 
 The gems are copied under mygems:
 
-  [~/tmp] ls mygems
-  bin  ext  lib
-  [~/tmp] ls mygems/lib
-  action-nokogiri.rb  json.rb   nokogiri.rb  rack.rb  sinatra.rb
-  json                nokogiri  rack         sinatra  xsd
+    [~/tmp] ls mygems
+    bin  ext  lib
+    [~/tmp] ls mygems/lib
+    action-nokogiri.rb  json.rb   nokogiri.rb  rack.rb  sinatra.rb
+    json                nokogiri  rack         sinatra  xsd
 
 The output of 'crown -v' shows you which gems (and versions) it is gathering, including all dependencies, and it shows you the PATH and RUBYLIB you need to use those files:
 
-  [~/tmp] export RUBYOPT=''
-  [~/tmp] export RUBYLIB=/home/vjoel/tmp/mygems/ext:/home/vjoel/tmp/mygems/ext/json/ext:/home/vjoel/tmp/mygems/lib
-  [~/tmp] ruby -r json -e 'p JSON'
-  JSON
+    [~/tmp] export RUBYOPT=''
+    [~/tmp] export RUBYLIB=/home/vjoel/tmp/mygems/ext:/home/vjoel/tmp/mygems/ext/json/ext:/home/vjoel/tmp/mygems/lib
+    [~/tmp] ruby -r json -e 'p JSON'
+    JSON
 
 Why?
+----
 
 * You can stop requiring 'rubygems' and you don't need RUBYOPT='rubygems'. There are no runtime dependencies on rubygems.
 
